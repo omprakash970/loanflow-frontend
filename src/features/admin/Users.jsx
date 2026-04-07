@@ -1,6 +1,7 @@
+import { useEffect, useState } from "react";
 import DashboardLayout from "../../components/layout/DashboardLayout";
-import { platformUsers } from "../../data/platformUsers.mock";
 import DataTable from "../../components/common/Table";
+import { apiGet } from "../../utils/apiClient";
 
 const roleColors = {
   Admin:    { color: "#f59e0b", bg: "rgba(245,158,11,0.1)" },
@@ -77,17 +78,47 @@ const columns = [
   { key: "joinDate", label: "Joined" },
 ];
 
-const totalActive = platformUsers.filter((u) => u.status === "Active").length;
-const totalDisabled = platformUsers.filter((u) => u.status === "Disabled").length;
-
-const summaryStats = [
-  { title: "Total Users",    value: platformUsers.length, accent: "#f59e0b", icon: "◑" },
-  { title: "Active",         value: totalActive,          accent: "#34d399", icon: "◈" },
-  { title: "Disabled",       value: totalDisabled,        accent: "#f87171", icon: "◐" },
-  { title: "Roles",          value: "4",                  accent: "#818cf8", icon: "◒" },
-];
-
 export default function Users() {
+  const [users, setUsers] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchUsers = async () => {
+      try {
+        const response = await apiGet("/admin/users/list");
+        if (response && response.data && Array.isArray(response.data)) {
+          // Map backend users to table format
+          const mappedUsers = response.data.map((user, index) => ({
+            id: `USR${String(index + 1).padStart(3, "0")}`,
+            name: user.fullName || "N/A",
+            email: user.email,
+            role: user.role.charAt(0) + user.role.slice(1).toLowerCase(),
+            status: "Active",
+            joinDate: new Date(user.createdAt).toISOString().split('T')[0],
+          }));
+          setUsers(mappedUsers);
+        }
+      } catch (err) {
+        console.error("Failed to fetch users:", err);
+        setUsers([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchUsers();
+  }, []);
+
+  const totalActive = users.filter((u) => u.status === "Active").length;
+  const totalDisabled = users.filter((u) => u.status === "Disabled").length;
+
+  const summaryStats = [
+    { title: "Total Users", value: users.length, accent: "#f59e0b", icon: "◑" },
+    { title: "Active", value: totalActive, accent: "#34d399", icon: "◈" },
+    { title: "Disabled", value: totalDisabled, accent: "#f87171", icon: "◐" },
+    { title: "Roles", value: "4", accent: "#818cf8", icon: "◒" },
+  ];
+
   return (
     <DashboardLayout>
       <style>{`
@@ -164,13 +195,17 @@ export default function Users() {
         </div>
 
         {/* Users table */}
-        <DataTable
-          columns={columns}
-          data={platformUsers}
-          filterKey="role"
-          filterOptions={["Admin", "Lender", "Borrower", "Analyst"]}
-          pageSize={8}
-        />
+        {loading ? (
+          <div style={{ color: "#64748b", textAlign: "center", padding: "40px" }}>Loading users...</div>
+        ) : (
+          <DataTable
+            columns={columns}
+            data={users}
+            filterKey="role"
+            filterOptions={["Admin", "Lender", "Borrower", "Analyst"]}
+            pageSize={8}
+          />
+        )}
       </div>
     </DashboardLayout>
   );

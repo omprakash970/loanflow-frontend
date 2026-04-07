@@ -3,6 +3,7 @@ import { useAuth } from "../context/AuthContext";
 import ProtectedRoute from "./ProtectedRoute";
 import Landing from "../pages/Landing";
 import Login from "../pages/auth/Login";
+import Register from "../pages/auth/Register";
 import NotFound from "../pages/NotFound";
 
 // Dashboards
@@ -16,12 +17,14 @@ import ApplyLoan from "../features/borrower/ApplyLoan";
 import MyLoans from "../features/borrower/MyLoans";
 import EmiSchedule from "../features/borrower/EmiSchedule";
 import Profile from "../features/borrower/Profile";
+import LoanOffers from "../features/borrower/LoanOffers";
 
 // Lender features
 import CreateLoan from "../features/lender/CreateLoan";
 import ActiveLoans from "../features/lender/ActiveLoans";
 import Borrowers from "../features/lender/Borrowers";
 import Payments from "../features/lender/Payments";
+import OpenRequests from "../features/lender/OpenRequests";
 
 // Admin features
 import LoansOverview from "../features/admin/LoansOverview";
@@ -58,6 +61,7 @@ export default function AppRoutes() {
       <Routes>
         <Route path="/" element={<Landing />} />
         <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Register />} />
 
         {/* Protected app routes */}
         <Route
@@ -75,6 +79,14 @@ export default function AppRoutes() {
           element={
             <ProtectedRoute allowedRoles={["BORROWER"]}>
               <ApplyLoan />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/app/loan-offers"
+          element={
+            <ProtectedRoute allowedRoles={["BORROWER"]}>
+              <LoanOffers />
             </ProtectedRoute>
           }
         />
@@ -109,6 +121,14 @@ export default function AppRoutes() {
           element={
             <ProtectedRoute allowedRoles={["LENDER"]}>
               <CreateLoan />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/app/open-requests"
+          element={
+            <ProtectedRoute allowedRoles={["LENDER"]}>
+              <OpenRequests />
             </ProtectedRoute>
           }
         />

@@ -1,32 +1,49 @@
+import { useEffect, useState } from "react";
 import DashboardLayout from "../../components/layout/DashboardLayout";
-
-const stats = [
-	{ title: "Outstanding Balance", value: "$42,500", meta: "Next payment in 8 days", icon: "◈", accent: "#818cf8" },
-	{ title: "EMIs Remaining",      value: "18",       meta: "of 36 total",           icon: "◉", accent: "#2dd4bf" },
-	{ title: "Auto-Pay",            value: "Active",   meta: "Last debit Feb 12",     icon: "◐", accent: "#34d399" },
-	{ title: "Credit Score",        value: "742",      meta: "Checked Jan 30",        icon: "◑", accent: "#fb923c" },
-	{ title: "Documents",           value: "6",        meta: "2 need signature",      icon: "◒", accent: "#f59e0b" },
-	{ title: "Total Paid",          value: "$19,500",  meta: "Since inception",       icon: "⬡", accent: "#38bdf8" },
-];
-
-const emiSchedule = [
-	{ month: "Feb 2026", amount: "$1,320", status: "upcoming", daysLeft: 8  },
-	{ month: "Mar 2026", amount: "$1,320", status: "scheduled" },
-	{ month: "Apr 2026", amount: "$1,320", status: "scheduled" },
-	{ month: "May 2026", amount: "$1,320", status: "scheduled" },
-	{ month: "Jun 2026", amount: "$1,320", status: "scheduled" },
-];
-
-const pastPayments = [
-	{ date: "Jan 12, 2026", amount: "$1,320", method: "Auto-Pay", status: "paid" },
-	{ date: "Dec 12, 2025", amount: "$1,320", method: "Auto-Pay", status: "paid" },
-	{ date: "Nov 12, 2025", amount: "$1,320", method: "Manual",   status: "paid" },
-];
-
-// Progress: 18 paid out of 36
-const progress = Math.round((18 / 36) * 100);
+import { apiGet } from "../../utils/apiClient";
 
 export default function BorrowerDashboard() {
+	const [loans, setLoans] = useState([]);
+	const [payments, setPayments] = useState([]);
+	const [loading, setLoading] = useState(true);
+
+	useEffect(() => {
+		const fetchData = async () => {
+			try {
+				// Fetch borrower's loans
+				const loansRes = await apiGet("/loans/my-loans");
+				setLoans(loansRes?.data || []);
+
+				// Fetch payment history (if endpoint exists)
+				try {
+					const paymentsRes = await apiGet("/borrower/payments");
+					setPayments(paymentsRes?.data || []);
+				} catch {
+					console.log("Payments endpoint not available yet");
+					setPayments([]);
+				}
+			} catch (err) {
+				console.error("Failed to fetch borrower data:", err);
+				setLoans([]);
+				setPayments([]);
+			} finally {
+				setLoading(false);
+			}
+		};
+		fetchData();
+	}, []);
+
+
+	const upcomingEMIs = loans.length > 0 && loans[0].emiSchedule 
+		? loans[0].emiSchedule.filter(e => e.status === "upcoming" || e.status === "scheduled").slice(0, 5)
+		: [];
+
+	const paymentHistory = payments.slice(0, 5).map((p) => ({
+		date: new Date(p.paymentDate).toLocaleDateString(),
+		amount: `$${p.amount}`,
+		method: p.paymentMethod || "Auto-Pay",
+		status: p.status || "paid",
+	}));
 	return (
 		<DashboardLayout>
 			<style>{`
@@ -37,6 +54,16 @@ export default function BorrowerDashboard() {
         .br-eyebrow::before { content:''; width:18px; height:1px; background:#818cf8; opacity:0.6; }
         .br-title { font-family:'Syne',sans-serif; font-size:28px; font-weight:800; color:#f0f4f8; letter-spacing:-0.02em; }
         .br-sub { font-size:13.5px; font-weight:300; color:#64748b; font-family:'DM Sans',sans-serif; }
+
+        .empty-state { 
+          display:flex; flex-direction:column; align-items:center; justify-content:center;
+          padding:60px 20px; text-align:center;
+          background:rgba(13,20,32,0.5); border:1px dashed rgba(255,255,255,0.1);
+          border-radius:14px;
+        }
+        .empty-icon { font-size:48px; opacity:0.6; margin-bottom:16px; }
+        .empty-title { font-family:'Syne',sans-serif; font-size:18px; font-weight:700; color:#cbd5e1; margin-bottom:8px; }
+        .empty-sub { font-size:13px; color:#64748b; margin-bottom:24px; max-width:400px; }
 
         /* Loan progress banner */
         .loan-banner {
@@ -104,86 +131,89 @@ export default function BorrowerDashboard() {
 					<p className="br-sub">Balances, EMI schedule, and payment history at a glance.</p>
 				</div>
 
-				{/* Loan progress banner */}
-				<div className="loan-banner">
-					<div className="loan-banner-left">
-						<div className="loan-banner-label">Loan Repayment Progress</div>
-						<div className="loan-banner-val">Home Loan · $62,000</div>
-						<div className="progress-track">
-							<div className="progress-fill" style={{ width: `${progress}%` }} />
-						</div>
-						<div className="progress-label">{progress}% paid · 18 of 36 EMIs completed</div>
+				{loading ? (
+					<div style={{ color: "#64748b", textAlign: "center", padding: "40px" }}>Loading...</div>
+				) : loans.length === 0 ? (
+					<div className="empty-state">
+						<div className="empty-icon">◈</div>
+						<div className="empty-title">No Loans Yet</div>
+						<div className="empty-sub">You don't have any active loans. Start by applying for a loan to get organized.</div>
 					</div>
-					<div className="loan-banner-right">
-						<div className="loan-stat">
-							<div className="loan-stat-val" style={{ color: "#818cf8" }}>$42.5K</div>
-							<div className="loan-stat-label">Remaining</div>
-						</div>
-						<div className="loan-stat">
-							<div className="loan-stat-val" style={{ color: "#34d399" }}>$19.5K</div>
-							<div className="loan-stat-label">Paid</div>
-						</div>
-						<div className="loan-stat">
-							<div className="loan-stat-val" style={{ color: "#fb923c" }}>8 days</div>
-							<div className="loan-stat-label">Next EMI</div>
-						</div>
-					</div>
-				</div>
-
-				{/* Stats */}
-				<div className="br-stats">
-					{stats.map((s) => (
-						<div
-							key={s.title}
-							className="bstat"
-							style={{ "--ac": s.accent, "--ac-b": s.accent + "44", "--ac-g": s.accent + "18" }}
-						>
-							<div className="bstat-head">
-								<span className="bstat-label">{s.title}</span>
-								<span className="bstat-icon">{s.icon}</span>
-							</div>
-							<div className="bstat-value">{s.value}</div>
-							<div className="bstat-meta">{s.meta}</div>
-						</div>
-					))}
-				</div>
-
-				{/* Bottom panels */}
-				<div className="br-bottom">
-					<div className="panel">
-						<div className="panel-head">
-							<span className="panel-title">Upcoming EMIs</span>
-							<span className="panel-sub">$1,320 / mo</span>
-						</div>
-						{emiSchedule.map((e) => (
-							<div key={e.month} className="emi-row">
-								<div className="emi-month">{e.month}</div>
-								<div className="emi-amt">{e.amount}</div>
-								{e.status === "upcoming"
-									? <span className="emi-badge badge-upcoming">Due in {e.daysLeft}d</span>
-									: <span className="emi-badge badge-sched">Scheduled</span>
-								}
-							</div>
-						))}
-					</div>
-
-					<div className="panel">
-						<div className="panel-head">
-							<span className="panel-title">Payment History</span>
-							<span className="panel-sub">All cleared</span>
-						</div>
-						{pastPayments.map((p) => (
-							<div key={p.date} className="pay-row">
-								<div>
-									<div className="pay-date">{p.date}</div>
-									<div className="pay-method">{p.method}</div>
+				) : (
+					<>
+						{/* Loan progress banner */}
+						{loans[0] && (
+							<div className="loan-banner">
+								<div className="loan-banner-left">
+									<div className="loan-banner-label">Loan Repayment Progress</div>
+									<div className="loan-banner-val">{loans[0].loanType || "Loan"} · ${loans[0].amount?.toLocaleString() || 0}</div>
+									<div className="progress-track">
+										<div className="progress-fill" style={{ width: `${Math.round(((loans[0].totalEmis - loans[0].emisPending) / loans[0].totalEmis) * 100) || 0}%` }} />
+									</div>
+									<div className="progress-label">{Math.round(((loans[0].totalEmis - loans[0].emisPending) / loans[0].totalEmis) * 100) || 0}% paid · {loans[0].emisPaid || 0} of {loans[0].totalEmis || 0} EMIs completed</div>
 								</div>
-								<div className="pay-amt">{p.amount}</div>
-								<div className="pay-dot" />
+								<div className="loan-banner-right">
+									<div className="loan-stat">
+										<div className="loan-stat-val" style={{ color: "#818cf8" }}>${(loans[0].outstandingAmount || 0).toLocaleString()}</div>
+										<div className="loan-stat-label">Remaining</div>
+									</div>
+									<div className="loan-stat">
+										<div className="loan-stat-val" style={{ color: "#34d399" }}>${(loans[0].amountPaid || 0).toLocaleString()}</div>
+										<div className="loan-stat-label">Paid</div>
+									</div>
+									<div className="loan-stat">
+										<div className="loan-stat-val" style={{ color: "#fb923c" }}>{loans[0].daysTillNextEMI || 0} days</div>
+										<div className="loan-stat-label">Next EMI</div>
+									</div>
+								</div>
 							</div>
-						))}
-					</div>
-				</div>
+						)}
+
+						{/* Bottom panels */}
+						<div className="br-bottom">
+							<div className="panel">
+								<div className="panel-head">
+									<span className="panel-title">Upcoming EMIs</span>
+									<span className="panel-sub">${(loans[0]?.monthlyEMI || 0).toLocaleString()} / mo</span>
+								</div>
+								{upcomingEMIs.length > 0 ? (
+									upcomingEMIs.map((e, idx) => (
+										<div key={idx} className="emi-row">
+											<div className="emi-month">{new Date(e.dueDate).toLocaleDateString("en", { month: "short", year: "numeric" })}</div>
+											<div className="emi-amt">${e.amount}</div>
+											<span className={`emi-badge ${e.status === "upcoming" ? "badge-upcoming" : "badge-sched"}`}>
+												{e.status === "upcoming" ? `Due in ${e.daysLeft || 0}d` : "Scheduled"}
+											</span>
+										</div>
+									))
+								) : (
+									<div style={{ padding: "20px", textAlign: "center", color: "#475569" }}>No upcoming EMIs</div>
+								)}
+							</div>
+
+							<div className="panel">
+								<div className="panel-head">
+									<span className="panel-title">Payment History</span>
+									<span className="panel-sub">{payments.length > 0 ? "Latest" : "None"}</span>
+								</div>
+								{paymentHistory.length > 0 ? (
+									paymentHistory.map((p, idx) => (
+										<div key={idx} className="pay-row">
+											<div>
+												<div className="pay-date">{p.date}</div>
+												<div className="pay-method">{p.method}</div>
+											</div>
+											<div className="pay-amt">{p.amount}</div>
+											<div className="pay-dot" />
+										</div>
+									))
+								) : (
+									<div style={{ padding: "20px", textAlign: "center", color: "#475569" }}>No payments yet</div>
+								)}
+							</div>
+						</div>
+					</>
+				)}
 			</div>
 		</DashboardLayout>
 	);

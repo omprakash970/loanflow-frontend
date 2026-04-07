@@ -1,33 +1,39 @@
+import { useEffect, useMemo, useState } from "react";
 import DashboardLayout from "../../components/layout/DashboardLayout";
-import { payments } from "../../data/payments.mock";
 import DataTable from "../../components/common/Table";
+import { apiGet } from "../../utils/apiClient";
 
 const statusColors = {
-  Completed: { color: "#34d399", bg: "rgba(52,211,153,0.1)"  },
-  Pending:   { color: "#fb923c", bg: "rgba(251,146,60,0.1)"  },
-  Failed:    { color: "#f87171", bg: "rgba(248,113,113,0.1)" },
+  COMPLETED: { color: "#34d399", bg: "rgba(52,211,153,0.1)" },
+  PENDING: { color: "#fb923c", bg: "rgba(251,146,60,0.1)" },
+  FAILED: { color: "#f87171", bg: "rgba(248,113,113,0.1)" },
 };
 
 const columns = [
-  { key: "id", label: "Payment ID" },
-  { key: "borrower", label: "Borrower" },
-  { key: "loanId", label: "Loan ID" },
+  { key: "paymentId", label: "Payment ID" },
+  { key: "borrowerName", label: "Borrower" },
+  { key: "loanCode", label: "Loan ID" },
   {
     key: "amount",
     label: "Amount Paid",
     render: (val) => (
       <span style={{ fontFamily: "'Syne', sans-serif", fontWeight: 700, color: "#f0f4f8" }}>
-        ${Number(val).toLocaleString()}
+        ${Number(val || 0).toLocaleString()}
       </span>
     ),
   },
-  { key: "date", label: "Payment Date" },
+  {
+    key: "paymentDate",
+    label: "Payment Date",
+    render: (val) => (val ? new Date(val).toLocaleDateString() : "—"),
+  },
   { key: "method", label: "Method" },
   {
     key: "status",
     label: "Status",
     render: (val) => {
-      const s = statusColors[val] || { color: "#94a3b8", bg: "rgba(148,163,184,0.1)" };
+      const key = String(val || "").toUpperCase();
+      const s = statusColors[key] || { color: "#94a3b8", bg: "rgba(148,163,184,0.1)" };
       return (
         <span
           style={{
@@ -55,30 +61,53 @@ const columns = [
               boxShadow: `0 0 6px ${s.color}`,
             }}
           />
-          {val}
+          {key || "—"}
         </span>
       );
     },
   },
 ];
 
-const totalCollected = payments
-  .filter((p) => p.status === "Completed")
-  .reduce((sum, p) => sum + p.amount, 0);
-const totalPending = payments
-  .filter((p) => p.status === "Pending")
-  .reduce((sum, p) => sum + p.amount, 0);
-const completedCount = payments.filter((p) => p.status === "Completed").length;
-const pendingCount = payments.filter((p) => p.status === "Pending").length;
-
-const summaryStats = [
-  { title: "Total Collected",  value: "$" + totalCollected.toLocaleString(),  accent: "#34d399", icon: "◈" },
-  { title: "Pending Amount",   value: "$" + totalPending.toLocaleString(),    accent: "#fb923c", icon: "◉" },
-  { title: "Completed",        value: completedCount,                         accent: "#2dd4bf", icon: "◐" },
-  { title: "Pending / Failed", value: pendingCount + payments.filter((p) => p.status === "Failed").length, accent: "#f87171", icon: "◒" },
-];
-
 export default function Payments() {
+  const [payments, setPayments] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    const fetchPayments = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const res = await apiGet("/payments/lender/my");
+        setPayments(res?.data || []);
+      } catch (e) {
+        console.error("Failed to load payments", e);
+        setError("Failed to load payments");
+        setPayments([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchPayments();
+  }, []);
+
+  const summaryStats = useMemo(() => {
+    const completed = payments.filter((p) => String(p.status).toUpperCase() === "COMPLETED");
+    const pending = payments.filter((p) => String(p.status).toUpperCase() === "PENDING");
+    const failed = payments.filter((p) => String(p.status).toUpperCase() === "FAILED");
+
+    const totalCollected = completed.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+    const totalPending = pending.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+
+    return [
+      { title: "Total Collected", value: "$" + totalCollected.toLocaleString(), accent: "#34d399", icon: "◈" },
+      { title: "Pending Amount", value: "$" + totalPending.toLocaleString(), accent: "#fb923c", icon: "◉" },
+      { title: "Completed", value: completed.length, accent: "#2dd4bf", icon: "◐" },
+      { title: "Pending / Failed", value: pending.length + failed.length, accent: "#f87171", icon: "◒" },
+    ];
+  }, [payments]);
+
   return (
     <DashboardLayout>
       <style>{`
@@ -137,31 +166,37 @@ export default function Payments() {
           <p className="pay-sub">All payment transactions received from borrowers.</p>
         </div>
 
-        {/* Summary stats */}
-        <div className="pay-stats">
-          {summaryStats.map((s) => (
-            <div
-              key={s.title}
-              className="pay-stat"
-              style={{ "--ac": s.accent, "--ac-border": s.accent + "44", "--ac-glow": s.accent + "18" }}
-            >
-              <div className="pay-stat-top">
-                <span className="pay-stat-label">{s.title}</span>
-                <span className="pay-stat-icon">{s.icon}</span>
-              </div>
-              <div className="pay-stat-value">{s.value}</div>
+        {loading ? (
+          <div style={{ color: "#64748b", padding: 20 }}>Loading...</div>
+        ) : error ? (
+          <div style={{ color: "#ef4444", padding: 20 }}>{error}</div>
+        ) : (
+          <>
+            <div className="pay-stats">
+              {summaryStats.map((s) => (
+                <div
+                  key={s.title}
+                  className="pay-stat"
+                  style={{ "--ac": s.accent, "--ac-border": s.accent + "44", "--ac-glow": s.accent + "18" }}
+                >
+                  <div className="pay-stat-top">
+                    <span className="pay-stat-label">{s.title}</span>
+                    <span className="pay-stat-icon">{s.icon}</span>
+                  </div>
+                  <div className="pay-stat-value">{s.value}</div>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
 
-        {/* Payments table */}
-        <DataTable
-          columns={columns}
-          data={payments}
-          filterKey="status"
-          filterOptions={["Completed", "Pending", "Failed"]}
-          pageSize={8}
-        />
+            <DataTable
+              columns={columns}
+              data={payments}
+              filterKey="status"
+              filterOptions={["COMPLETED", "PENDING", "FAILED"]}
+              pageSize={8}
+            />
+          </>
+        )}
       </div>
     </DashboardLayout>
   );

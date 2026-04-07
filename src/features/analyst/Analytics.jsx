@@ -1,29 +1,66 @@
+import { useState, useEffect } from "react";
 import DashboardLayout from "../../components/layout/DashboardLayout";
-import { riskReports, loans } from "../../data/loans.mock";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from "recharts";
 import { CHART_COLORS } from "../../utils/constants";
-
-/* Risk Score Distribution — bucket into bands */
-const riskBands = [
-  { band: "0–20", count: riskReports.filter((r) => r.riskScore <= 20).length },
-  { band: "21–40", count: riskReports.filter((r) => r.riskScore > 20 && r.riskScore <= 40).length },
-  { band: "41–60", count: riskReports.filter((r) => r.riskScore > 40 && r.riskScore <= 60).length },
-  { band: "61–80", count: riskReports.filter((r) => r.riskScore > 60 && r.riskScore <= 80).length },
-  { band: "81–100", count: riskReports.filter((r) => r.riskScore > 80).length },
-];
-
-/* Portfolio Exposure by Purpose */
-const purposeMap = {};
-loans.forEach((l) => {
-  purposeMap[l.purpose] = (purposeMap[l.purpose] || 0) + l.amount;
-});
-const exposureData = Object.entries(purposeMap).map(([name, value]) => ({ name, value }));
-
-const handleExport = () => {
-  alert("Report export initiated (UI-only demo).");
-};
+import { apiGet } from "../../utils/apiClient";
 
 export default function Analytics() {
+  const [riskBands, setRiskBands] = useState([]);
+  const [exposureData, setExposureData] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    const fetchAnalyticsData = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+
+        const riskRes = await apiGet("/analytics/risk-distribution");
+        const exposureRes = await apiGet("/analytics/portfolio-exposure");
+
+        if (riskRes?.success) {
+          setRiskBands(riskRes.data || []);
+        } else {
+          setRiskBands([]);
+        }
+
+        if (exposureRes?.success) {
+          setExposureData(exposureRes.data || []);
+        } else {
+          setExposureData([]);
+        }
+      } catch (err) {
+        console.error("Failed to fetch analytics data:", err);
+        setError("Failed to load analytics data");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchAnalyticsData();
+  }, []);
+
+  const handleExport = async () => {
+    try {
+      const summary = await apiGet("/analytics/summary");
+      const blob = new Blob([JSON.stringify(summary, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `loanflow-analytics-${Date.now()}.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error(e);
+      alert("Export failed");
+    }
+  };
+
+  const getTotalLoans = () => riskBands.reduce((sum, band) => sum + band.count, 0);
+
   return (
     <DashboardLayout>
       <style>{`
@@ -91,40 +128,46 @@ export default function Analytics() {
           <div className="chart-panel">
             <div className="chart-panel-head">
               <span className="chart-panel-title">Risk Score Distribution</span>
-              <span className="chart-panel-sub">{riskReports.length} loans</span>
+              <span className="chart-panel-sub">{loading ? "..." : getTotalLoans()} loans</span>
             </div>
             <div className="chart-body">
-              <ResponsiveContainer width="100%" height={260}>
-                <BarChart data={riskBands} barSize={32}>
-                  <XAxis
-                    dataKey="band"
-                    tick={{ fill: "#475569", fontSize: 11, fontFamily: "'DM Sans',sans-serif" }}
-                    axisLine={{ stroke: "rgba(255,255,255,0.06)" }}
-                    tickLine={false}
-                  />
-                  <YAxis
-                    allowDecimals={false}
-                    tick={{ fill: "#334155", fontSize: 11, fontFamily: "'DM Sans',sans-serif" }}
-                    axisLine={false}
-                    tickLine={false}
-                  />
-                  <Tooltip
-                    contentStyle={{
-                      background: "rgba(13,20,32,0.95)",
-                      border: "1px solid rgba(255,255,255,0.08)",
-                      borderRadius: 10,
-                      color: "#cbd5e1",
-                      fontFamily: "'DM Sans',sans-serif",
-                      fontSize: 12,
-                    }}
-                  />
-                  <Bar dataKey="count" radius={[6, 6, 0, 0]}>
-                    {riskBands.map((_, i) => (
-                      <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
+              {loading ? (
+                <div style={{ textAlign: "center", padding: "40px", color: "#ffffff" }}>Loading...</div>
+              ) : error ? (
+                <div style={{ textAlign: "center", padding: "40px", color: "#ef4444" }}>{error}</div>
+              ) : (
+                <ResponsiveContainer width="100%" height={260}>
+                  <BarChart data={riskBands} barSize={32}>
+                    <XAxis
+                      dataKey="band"
+                      tick={{ fill: "#ffffff", fontSize: 11, fontFamily: "'DM Sans',sans-serif" }}
+                      axisLine={{ stroke: "rgba(255,255,255,0.06)" }}
+                      tickLine={false}
+                    />
+                    <YAxis
+                      allowDecimals={false}
+                      tick={{ fill: "#334155", fontSize: 11, fontFamily: "'DM Sans',sans-serif" }}
+                      axisLine={false}
+                      tickLine={false}
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        background: "rgba(0,93,255,0.95)",
+                        border: "1px solid rgba(255,255,255,0.08)",
+                        borderRadius: 10,
+                        color: "#cbd5e1",
+                        fontFamily: "'DM Sans',sans-serif",
+                        fontSize: 12,
+                      }}
+                    />
+                    <Bar dataKey="count" radius={[6, 6, 0, 0]}>
+                      {riskBands.map((_, i) => (
+                        <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
             </div>
           </div>
 
@@ -132,42 +175,50 @@ export default function Analytics() {
           <div className="chart-panel">
             <div className="chart-panel-head">
               <span className="chart-panel-title">Portfolio Exposure</span>
-              <span className="chart-panel-sub">By purpose</span>
+              <span className="chart-panel-sub">By status</span>
             </div>
             <div className="chart-body">
-              <ResponsiveContainer width="100%" height={260}>
-                <PieChart>
-                  <Pie
-                    data={exposureData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={55}
-                    outerRadius={90}
-                    paddingAngle={3}
-                    dataKey="value"
-                    stroke="none"
-                  >
-                    {exposureData.map((_, i) => (
-                      <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <Legend
-                    verticalAlign="bottom"
-                    formatter={(val) => <span style={{ color: "#94a3b8", fontSize: 11, fontFamily: "'DM Sans',sans-serif" }}>{val}</span>}
-                  />
-                  <Tooltip
-                    formatter={(val) => `$${Number(val).toLocaleString()}`}
-                    contentStyle={{
-                      background: "rgba(13,20,32,0.95)",
-                      border: "1px solid rgba(255,255,255,0.08)",
-                      borderRadius: 10,
-                      color: "#cbd5e1",
-                      fontFamily: "'DM Sans',sans-serif",
-                      fontSize: 12,
-                    }}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
+              {loading ? (
+                <div style={{ textAlign: "center", padding: "40px", color: "#ffffff" }}>Loading...</div>
+              ) : error ? (
+                <div style={{ textAlign: "center", padding: "40px", color: "#ef4444" }}>{error}</div>
+              ) : exposureData.length === 0 ? (
+                <div style={{ textAlign: "center", padding: "40px", color: "#ffffff" }}>No data available</div>
+              ) : (
+                <ResponsiveContainer width="100%" height={260}>
+                  <PieChart>
+                    <Pie
+                      data={exposureData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={55}
+                      outerRadius={90}
+                      paddingAngle={3}
+                      dataKey="value"
+                      stroke="none"
+                    >
+                      {exposureData.map((_, i) => (
+                        <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Legend
+                      verticalAlign="bottom"
+                      formatter={(val) => <span style={{ color: "#94a3b8", fontSize: 11, fontFamily: "'DM Sans',sans-serif" }}>{val}</span>}
+                    />
+                    <Tooltip
+                      formatter={(val) => `$${Number(val).toLocaleString()}`}
+                      contentStyle={{
+                        background: "rgba(228,229,234,0.95)",
+                        border: "1px solid rgba(255,255,255,0.08)",
+                        borderRadius: 10,
+                        color: "#cbd5e1",
+                        fontFamily: "'DM Sans',sans-serif",
+                        fontSize: 12,
+                      }}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              )}
             </div>
           </div>
         </div>

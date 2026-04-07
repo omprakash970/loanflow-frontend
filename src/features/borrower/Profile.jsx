@@ -1,32 +1,56 @@
+import { useMemo, useState } from "react";
 import DashboardLayout from "../../components/layout/DashboardLayout";
+import { useAuth } from "../../context/AuthContext";
+
+const STORAGE_KEY = "loanflow_borrower_profile";
 
 /* Static borrower profile data */
-const profile = {
-  name: "Arjun Mehta",
-  email: "arjun.mehta@loanflow.com",
-  phone: "+91 98765 43210",
-  address: "42 Marina Heights, Sector 18, Mumbai 400071",
-  accountStatus: "Active",
-  memberId: "BRW-201",
-  memberSince: "March 2025",
-};
-
-const documents = [
-  { name: "Aadhaar Card",       status: "Verified",  uploadDate: "Mar 12, 2025" },
-  { name: "PAN Card",           status: "Verified",  uploadDate: "Mar 12, 2025" },
-  { name: "Income Certificate", status: "Verified",  uploadDate: "Mar 15, 2025" },
-  { name: "Bank Statement",     status: "Verified",  uploadDate: "Mar 18, 2025" },
-  { name: "Address Proof",      status: "Pending",   uploadDate: "Feb 10, 2026" },
-  { name: "Employment Letter",  status: "Not Uploaded", uploadDate: "—" },
-];
-
 const docStatusStyle = {
-  Verified:     { color: "#34d399", bg: "rgba(52,211,153,0.1)" },
-  Pending:      { color: "#fb923c", bg: "rgba(251,146,60,0.1)" },
+  Verified: { color: "#34d399", bg: "rgba(52,211,153,0.1)" },
+  Pending: { color: "#fb923c", bg: "rgba(251,146,60,0.1)" },
   "Not Uploaded": { color: "#475569", bg: "rgba(255,255,255,0.04)" },
 };
 
 export default function Profile() {
+  const { user } = useAuth();
+
+  const [form, setForm] = useState(() => {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY);
+      return stored ? JSON.parse(stored) : { phone: "", address: "" };
+    } catch {
+      return { phone: "", address: "" };
+    }
+  });
+  const [saved, setSaved] = useState(false);
+
+  const displayName = user?.fullName || user?.email?.split("@")[0] || "Borrower";
+  const memberId = useMemo(() => {
+    if (user?.userId) return `BRW-${user.userId}`;
+    return "BRW-—";
+  }, [user?.userId]);
+
+  // Documents are placeholders for now; backend model can be added later.
+  const documents = useMemo(
+    () => [
+      { name: "Identity Proof", status: "Not Uploaded", uploadDate: "—" },
+      { name: "Income Proof", status: "Not Uploaded", uploadDate: "—" },
+      { name: "Address Proof", status: "Not Uploaded", uploadDate: "—" },
+    ],
+    []
+  );
+
+  const onChange = (key) => (e) => {
+    setSaved(false);
+    setForm((p) => ({ ...p, [key]: e.target.value }));
+  };
+
+  const onSave = () => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(form));
+    setSaved(true);
+    setTimeout(() => setSaved(false), 1500);
+  };
+
   return (
     <DashboardLayout>
       <style>{`
@@ -76,7 +100,6 @@ export default function Profile() {
           font-family:'Syne',sans-serif; font-size:20px; font-weight:800;
           color:#818cf8; flex-shrink:0;
         }
-        .prf-avatar-info {}
         .prf-avatar-name {
           font-family:'Syne',sans-serif; font-size:20px; font-weight:800;
           color:#f0f4f8; letter-spacing:-0.01em; margin-bottom:4px;
@@ -110,6 +133,19 @@ export default function Profile() {
           font-family:'DM Sans',sans-serif; text-align:right;
         }
 
+        .field {
+          width:100%;
+          background:rgba(255,255,255,0.03);
+          border:1px solid rgba(255,255,255,0.06);
+          color:#e2e8f0;
+          padding:10px 12px;
+          border-radius:10px;
+          outline:none;
+          font-family:'DM Sans',sans-serif;
+          font-size:13px;
+        }
+        .field::placeholder { color:#334155; }
+
         /* Document rows */
         .prf-doc-row {
           display:flex; align-items:center; gap:14px;
@@ -140,26 +176,23 @@ export default function Profile() {
           font-family:'DM Sans',sans-serif; flex-shrink:0;
         }
 
-        /* Edit button */
-        .prf-edit-btn {
+        /* Save button */
+        .prf-save-btn {
           display:inline-flex; align-items:center; gap:7px;
-          padding:10px 22px; border-radius:10px;
-          font-family:'DM Sans',sans-serif; font-size:13px; font-weight:500;
+          padding:10px 18px; border-radius:10px;
+          font-family:'DM Sans',sans-serif; font-size:13px; font-weight:600;
           color:#818cf8; background:rgba(129,140,248,0.08);
           border:1px solid rgba(129,140,248,0.2);
           cursor:pointer; transition:all 0.15s;
         }
-        .prf-edit-btn:hover {
-          background:rgba(129,140,248,0.14);
-          border-color:rgba(129,140,248,0.35);
-        }
+        .prf-save-btn:hover { background:rgba(129,140,248,0.14); border-color:rgba(129,140,248,0.35); }
       `}</style>
 
       <div className="prf-root">
         <div className="prf-header">
           <div className="prf-eyebrow">Borrower Portal</div>
           <h1 className="prf-title">Profile</h1>
-          <p className="prf-sub">Your personal information and uploaded documents.</p>
+          <p className="prf-sub">Your registered details are shown below. Add more info anytime.</p>
         </div>
 
         <div className="prf-grid">
@@ -167,61 +200,50 @@ export default function Profile() {
           <div className="prf-panel">
             <div className="prf-panel-head">
               <span className="prf-panel-title">Personal Information</span>
-              <span className="prf-panel-sub">{profile.memberId}</span>
+              <span className="prf-panel-sub">{memberId}</span>
             </div>
 
-            {/* Avatar + name */}
             <div className="prf-card-top">
               <div className="prf-avatar">
-                {profile.name.split(" ").map((n) => n[0]).join("")}
+                {displayName
+                  .split(" ")
+                  .filter(Boolean)
+                  .slice(0, 2)
+                  .map((n) => n[0]?.toUpperCase())
+                  .join("")}
               </div>
-              <div className="prf-avatar-info">
-                <div className="prf-avatar-name">{profile.name}</div>
+              <div>
+                <div className="prf-avatar-name">{displayName}</div>
                 <div className="prf-avatar-id">
                   <span className="prf-status-dot" />
-                  {profile.accountStatus} · Member since {profile.memberSince}
+                  Active
                 </div>
               </div>
             </div>
 
-            {/* Info fields */}
             <div className="prf-info-row">
               <span className="prf-info-label">Email</span>
-              <span className="prf-info-value">{profile.email}</span>
+              <span className="prf-info-value">{user?.email || "—"}</span>
             </div>
-            <div className="prf-info-row">
+
+            <div className="prf-info-row" style={{ alignItems: "flex-start" }}>
               <span className="prf-info-label">Phone</span>
-              <span className="prf-info-value">{profile.phone}</span>
+              <div style={{ width: "60%" }}>
+                <input className="field" value={form.phone} onChange={onChange("phone")} placeholder="Add phone (optional)" />
+              </div>
             </div>
-            <div className="prf-info-row">
+
+            <div className="prf-info-row" style={{ alignItems: "flex-start" }}>
               <span className="prf-info-label">Address</span>
-              <span className="prf-info-value">{profile.address}</span>
+              <div style={{ width: "60%" }}>
+                <textarea className="field" rows={3} value={form.address} onChange={onChange("address")} placeholder="Add address (optional)" />
+              </div>
             </div>
-            <div className="prf-info-row">
-              <span className="prf-info-label">Status</span>
-              <span className="prf-info-value">
-                <span
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: 5,
-                    fontSize: "11px",
-                    fontWeight: 600,
-                    color: "#34d399",
-                  }}
-                >
-                  <span
-                    style={{
-                      width: 6,
-                      height: 6,
-                      borderRadius: "50%",
-                      background: "#34d399",
-                      boxShadow: "0 0 6px #34d399",
-                    }}
-                  />
-                  {profile.accountStatus}
-                </span>
-              </span>
+
+            <div style={{ padding: "14px 20px" }}>
+              <button type="button" className="prf-save-btn" onClick={onSave}>
+                ◈ {saved ? "Saved" : "Save Profile"}
+              </button>
             </div>
           </div>
 
@@ -229,7 +251,7 @@ export default function Profile() {
           <div className="prf-panel">
             <div className="prf-panel-head">
               <span className="prf-panel-title">Documents</span>
-              <span className="prf-panel-sub">{documents.filter((d) => d.status === "Verified").length} verified</span>
+              <span className="prf-panel-sub">0 verified</span>
             </div>
 
             {documents.map((doc) => {
@@ -251,28 +273,6 @@ export default function Profile() {
               );
             })}
           </div>
-        </div>
-
-        {/* Edit Profile button */}
-        <div>
-          <button
-            type="button"
-            className="prf-edit-btn"
-            onClick={() => alert("Edit Profile (UI-only demo)")}
-          >
-            ◈ Edit Profile
-          </button>
-          <span
-            style={{
-              marginLeft: 14,
-              fontSize: "11.5px",
-              color: "#334155",
-              fontFamily: "'DM Sans', sans-serif",
-              fontWeight: 300,
-            }}
-          >
-            Profile editing is not available in this demo
-          </span>
         </div>
       </div>
     </DashboardLayout>

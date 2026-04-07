@@ -1,5 +1,6 @@
 import { useAuth } from "../../context/AuthContext";
 import { useNavigate } from "react-router-dom";
+import { useState } from "react";
 
 const roleColors = {
     ADMIN:    { color: "#f59e0b", bg: "rgba(245,158,11,0.08)",  border: "rgba(245,158,11,0.25)",  glow: "rgba(245,158,11,0.15)"  },
@@ -10,13 +11,21 @@ const roleColors = {
 
 const roleIcon = {
     ADMIN: "◈", LENDER: "◉", BORROWER: "◐", ANALYST: "◑",
-};
-
+}
 export default function Topbar({ onToggleSidebar }) {
     const { user, logout } = useAuth();
     const navigate = useNavigate();
+    const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
     const role = user?.role ?? "GUEST";
     const rs = roleColors[role] ?? roleColors.LENDER;
+
+    const handleLogoutConfirm = () => {
+        const success = logout();
+        if (success) {
+            setShowLogoutConfirm(false);
+            navigate("/login", { replace: true });
+        }
+    };
 
     return (
         <>
@@ -243,7 +252,7 @@ export default function Topbar({ onToggleSidebar }) {
                     <button
                         type="button"
                         className="tb-logout"
-                        onClick={() => { logout(); navigate("/login"); }}
+                        onClick={() => setShowLogoutConfirm(true)}
                     >
                         Logout
                         <svg className="tb-logout-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -254,6 +263,146 @@ export default function Topbar({ onToggleSidebar }) {
                     </button>
                 </div>
             </header>
+
+            {/* Logout Confirmation Modal */}
+            {showLogoutConfirm && (
+                <>
+                    <div
+                        style={{
+                            position: "fixed",
+                            inset: 0,
+                            background: "rgba(0,0,0,0.6)",
+                            backdropFilter: "blur(4px)",
+                            zIndex: 999,
+                            animation: "fadeIn 0.2s ease-out",
+                        }}
+                        onClick={() => setShowLogoutConfirm(false)}
+                    />
+                    <div
+                        style={{
+                            position: "fixed",
+                            top: "50%",
+                            left: "50%",
+                            transform: "translate(-50%, -50%)",
+                            background: "rgba(13,20,32,0.95)",
+                            border: "1px solid rgba(248,113,113,0.25)",
+                            borderRadius: "14px",
+                            padding: "28px",
+                            maxWidth: "380px",
+                            width: "90%",
+                            zIndex: 1000,
+                            animation: "slideUp 0.3s ease-out",
+                            boxShadow: "0 20px 60px rgba(0,0,0,0.5)",
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div style={{ textAlign: "center" }}>
+                            <div style={{
+                                fontSize: "40px",
+                                marginBottom: "16px",
+                            }}>👋</div>
+                            <h2 style={{
+                                fontFamily: "'Syne', sans-serif",
+                                fontSize: "20px",
+                                fontWeight: "700",
+                                color: "#f0f4f8",
+                                marginBottom: "8px",
+                            }}>Confirm Logout</h2>
+                            <p style={{
+                                fontFamily: "'DM Sans', sans-serif",
+                                fontSize: "13px",
+                                color: "#cbd5e1",
+                                marginBottom: "24px",
+                                lineHeight: "1.5",
+                            }}>
+                                You are about to sign out from your <strong>{role}</strong> account. You'll need to sign in again to continue.
+                            </p>
+
+                            <div style={{
+                                display: "flex",
+                                gap: "12px",
+                                justifyContent: "center",
+                            }}>
+                                <button
+                                    type="button"
+                                    onClick={() => setShowLogoutConfirm(false)}
+                                    style={{
+                                        padding: "10px 20px",
+                                        background: "rgba(255,255,255,0.06)",
+                                        border: "1px solid rgba(255,255,255,0.12)",
+                                        color: "#cbd5e1",
+                                        borderRadius: "8px",
+                                        fontFamily: "'DM Sans', sans-serif",
+                                        fontSize: "13px",
+                                        fontWeight: "500",
+                                        cursor: "pointer",
+                                        transition: "all 0.15s",
+                                        minWidth: "100px",
+                                    }}
+                                    onMouseEnter={(e) => {
+                                        e.target.style.background = "rgba(255,255,255,0.1)";
+                                        e.target.style.borderColor = "rgba(255,255,255,0.2)";
+                                    }}
+                                    onMouseLeave={(e) => {
+                                        e.target.style.background = "rgba(255,255,255,0.06)";
+                                        e.target.style.borderColor = "rgba(255,255,255,0.12)";
+                                    }}
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={handleLogoutConfirm}
+                                    style={{
+                                        padding: "10px 20px",
+                                        background: "#f87171",
+                                        border: "1px solid #f87171",
+                                        color: "#fff",
+                                        borderRadius: "8px",
+                                        fontFamily: "'DM Sans', sans-serif",
+                                        fontSize: "13px",
+                                        fontWeight: "600",
+                                        cursor: "pointer",
+                                        transition: "all 0.15s",
+                                        minWidth: "100px",
+                                        display: "flex",
+                                        alignItems: "center",
+                                        justifyContent: "center",
+                                        gap: "6px",
+                                    }}
+                                    onMouseEnter={(e) => {
+                                        e.target.style.background = "#ef4444";
+                                        e.target.style.borderColor = "#ef4444";
+                                        e.target.style.boxShadow = "0 0 20px rgba(248,113,113,0.3)";
+                                    }}
+                                    onMouseLeave={(e) => {
+                                        e.target.style.background = "#f87171";
+                                        e.target.style.borderColor = "#f87171";
+                                        e.target.style.boxShadow = "none";
+                                    }}
+                                >
+                                    <span>Logout</span>
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                        <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4" />
+                                        <polyline points="16 17 21 12 16 7" />
+                                        <line x1="21" y1="12" x2="9" y2="12" />
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <style>{`
+                        @keyframes fadeIn {
+                            from { opacity: 0; }
+                            to { opacity: 1; }
+                        }
+                        @keyframes slideUp {
+                            from { opacity: 0; transform: translate(-50%, -45%); }
+                            to { opacity: 1; transform: translate(-50%, -50%); }
+                        }
+                    `}</style>
+                </>
+            )}
         </>
     );
 }

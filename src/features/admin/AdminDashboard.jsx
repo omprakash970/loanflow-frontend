@@ -1,37 +1,61 @@
+import { useEffect, useState } from "react";
 import DashboardLayout from "../../components/layout/DashboardLayout";
+import { apiGet, apiPatch } from "../../utils/apiClient";
 
-const stats = [
-	{ title: "Total Loans Issued", value: "$8.4M",  meta: "+6.2% vs last month",  icon: "◈", accent: "#f59e0b", trend: "up" },
-	{ title: "Active Borrowers",   value: "1,284",  meta: "+120 new this week",    icon: "◉", accent: "#2dd4bf", trend: "up" },
-	{ title: "Delinquency Rate",   value: "2.1%",   meta: "Down 0.4%",            icon: "◐", accent: "#34d399", trend: "down-good" },
-	{ title: "Platform Users",     value: "3,421",  meta: "Across 4 roles",       icon: "◑", accent: "#818cf8", trend: "neutral" },
-	{ title: "Pending Approvals",  value: "47",     meta: "12 flagged",           icon: "◒", accent: "#f87171", trend: "warn" },
-	{ title: "Monthly Revenue",    value: "$142K",  meta: "+18% from last month", icon: "⬡", accent: "#fb923c", trend: "up" },
-];
-
-const recentActivity = [
-	{ user: "Sarah K.",   action: "Loan approved",          amount: "$24,000", time: "2m ago",  status: "success" },
-	{ user: "Marc D.",    action: "Payment overdue",         amount: "$1,200",  time: "18m ago", status: "warn" },
-	{ user: "Priya M.",   action: "New account created",     amount: "—",       time: "1h ago",  status: "info" },
-	{ user: "James T.",   action: "Loan application flagged",amount: "$85,000", time: "2h ago",  status: "error" },
-	{ user: "Liu W.",     action: "EMI paid",                amount: "$3,400",  time: "3h ago",  status: "success" },
-];
-
-const roleBreakdown = [
-	{ role: "Borrower", count: 2104, pct: 61, color: "#818cf8" },
-	{ role: "Lender",   count: 847,  pct: 25, color: "#2dd4bf" },
-	{ role: "Analyst",  count: 312,  pct: 9,  color: "#34d399" },
-	{ role: "Admin",    count: 158,  pct: 5,  color: "#f59e0b" },
-];
-
-const statusMap = {
-	success: { dot: "#34d399", bg: "rgba(52,211,153,0.1)",  label: "Approved" },
-	warn:    { dot: "#f59e0b", bg: "rgba(245,158,11,0.1)",  label: "Overdue"  },
-	info:    { dot: "#818cf8", bg: "rgba(129,140,248,0.1)", label: "New"      },
-	error:   { dot: "#f87171", bg: "rgba(248,113,113,0.1)", label: "Flagged"  },
-};
 
 export default function AdminDashboard() {
+	const [pendingLoans, setPendingLoans] = useState([]);
+	const [loading, setLoading] = useState(true);
+	const [actionLoading, setActionLoading] = useState(null);
+
+	useEffect(() => {
+		const fetchPendingLoans = async () => {
+			try {
+				const response = await apiGet("/loans/pending");
+				setPendingLoans(response?.data || []);
+			} catch (err) {
+				console.error("Failed to fetch pending loans:", err);
+				setPendingLoans([]);
+			} finally {
+				setLoading(false);
+			}
+		};
+		fetchPendingLoans();
+	}, []);
+
+	const handleApproveLoan = async (loanId) => {
+		setActionLoading(loanId);
+		try {
+			await apiPatch(`/loans/${loanId}/approve`, {});
+			setPendingLoans(pendingLoans.filter(l => l.id !== loanId));
+		} catch (err) {
+			console.error("Failed to approve loan:", err);
+		} finally {
+			setActionLoading(null);
+		}
+	};
+
+	const handleRejectLoan = async (loanId) => {
+		setActionLoading(loanId);
+		try {
+			await apiPatch(`/loans/${loanId}/reject`, {});
+			setPendingLoans(pendingLoans.filter(l => l.id !== loanId));
+		} catch (err) {
+			console.error("Failed to reject loan:", err);
+		} finally {
+			setActionLoading(null);
+		}
+	};
+
+	const dynamicStats = [
+		{ title: "Total Loans Issued", value: "$0",   meta: "+0% vs last month",   icon: "◈", accent: "#f59e0b", trend: "up" },
+		{ title: "Active Borrowers",   value: "0",    meta: "+0 new this week",    icon: "◉", accent: "#2dd4bf", trend: "up" },
+		{ title: "Delinquency Rate",   value: "0%",   meta: "Down 0%",             icon: "◐", accent: "#34d399", trend: "down-good" },
+		{ title: "Platform Users",     value: "1",    meta: "1 admin",             icon: "◑", accent: "#818cf8", trend: "neutral" },
+		{ title: "Pending Approvals",  value: `${pendingLoans.length}`,    meta: pendingLoans.length > 0 ? `${pendingLoans.length} awaiting review` : "None",           icon: "◒", accent: "#f87171", trend: "warn" },
+		{ title: "Monthly Revenue",    value: "$0",   meta: "+0% from last month", icon: "⬡", accent: "#fb923c", trend: "up" },
+	];
+
 	return (
 		<DashboardLayout>
 			<style>{`
@@ -98,10 +122,8 @@ export default function AdminDashboard() {
         .trend-good  { color:#34d399; background:rgba(52,211,153,0.1); }
         .trend-warn  { color:#f59e0b; background:rgba(245,158,11,0.1); }
 
-        /* Bottom row */
-        .adm-bottom { display:grid; grid-template-columns:1fr 340px; gap:16px; }
-        @media(max-width:900px) { .adm-bottom { grid-template-columns:1fr; } }
-
+        /* Pending loans panel */
+        .adm-pending { margin-top: 16px; }
         .panel {
           background:rgba(13,20,32,0.85);
           border:1px solid rgba(255,255,255,0.06);
@@ -121,41 +143,35 @@ export default function AdminDashboard() {
           color:#64748b; background:rgba(255,255,255,0.04); font-family:'DM Sans',sans-serif;
         }
 
-        /* Activity list */
-        .act-row {
-          display:flex; align-items:center; gap:12px;
-          padding:12px 20px;
+        .loan-row {
+          display:flex; align-items:center; justify-content:space-between;
+          padding:14px 20px;
           border-bottom:1px solid rgba(255,255,255,0.03);
-          transition:background 0.15s;
         }
-        .act-row:last-child { border-bottom:none; }
-        .act-row:hover { background:rgba(255,255,255,0.02); }
-        .act-avatar {
-          width:32px; height:32px; border-radius:8px;
-          display:flex; align-items:center; justify-content:center;
-          font-size:11px; font-weight:700; flex-shrink:0;
-          font-family:'Syne',sans-serif;
-          background:rgba(255,255,255,0.05);
-          color:#94a3b8;
+        .loan-row:last-child { border-bottom:none; }
+        .loan-info { flex:1; }
+        .loan-borrower { font-size:13px; font-weight:500; color:#e2e8f0; font-family:'DM Sans',sans-serif; }
+        .loan-details { font-size:11px; color:#475569; font-family:'DM Sans',sans-serif; margin-top:3px; }
+        .loan-amount { font-size:14px; font-weight:700; color:#818cf8; font-family:'Syne',sans-serif; }
+        .loan-actions { display:flex; gap:8px; flex-shrink:0; }
+        .loan-btn {
+          padding:6px 12px; border:none; border-radius:6px;
+          font-size:11px; font-weight:600; cursor:pointer;
+          font-family:'DM Sans',sans-serif; transition:opacity 0.2s;
         }
-        .act-info { flex:1; }
-        .act-user { font-size:13px; font-weight:500; color:#e2e8f0; font-family:'DM Sans',sans-serif; }
-        .act-action { font-size:11.5px; color:#475569; font-weight:300; font-family:'DM Sans',sans-serif; }
-        .act-right { text-align:right; flex-shrink:0; }
-        .act-amount { font-size:12px; font-weight:600; color:#94a3b8; font-family:'Syne',sans-serif; }
-        .act-time { font-size:10.5px; color:#2e3f52; font-family:'DM Sans',sans-serif; margin-top:2px; }
-        .act-dot {
-          width:7px; height:7px; border-radius:50%; flex-shrink:0;
+        .loan-btn:disabled { opacity:0.5; cursor:not-allowed; }
+        .loan-btn:hover:not(:disabled) { opacity:0.85; }
+        .btn-approve {
+          background:#34d399; color:#0d1420;
+        }
+        .btn-reject {
+          background:#f87171; color:#0d1420;
         }
 
-        /* Role breakdown */
-        .role-row { padding:12px 20px; border-bottom:1px solid rgba(255,255,255,0.03); }
-        .role-row:last-child { border-bottom:none; }
-        .role-info { display:flex; justify-content:space-between; margin-bottom:7px; align-items:center; }
-        .role-name { font-size:12.5px; font-weight:500; color:#cbd5e1; font-family:'DM Sans',sans-serif; }
-        .role-count { font-size:12px; font-weight:600; color:#94a3b8; font-family:'Syne',sans-serif; }
-        .role-bar-bg { height:4px; background:rgba(255,255,255,0.05); border-radius:4px; overflow:hidden; }
-        .role-bar { height:100%; border-radius:4px; transition:width 0.6s ease; }
+        .empty-state {
+          padding:24px; text-align:center; color:#475569;
+          font-family:'DM Sans',sans-serif; font-size:13px;
+        }
       `}</style>
 
 			<div className="adm-root">
@@ -168,7 +184,7 @@ export default function AdminDashboard() {
 
 				{/* Stat cards */}
 				<div className="adm-stats">
-					{stats.map((s) => (
+					{dynamicStats.map((s) => (
 						<div
 							key={s.title}
 							className="stat-card"
@@ -187,50 +203,46 @@ export default function AdminDashboard() {
 					))}
 				</div>
 
-				{/* Bottom row */}
-				<div className="adm-bottom">
-					{/* Activity feed */}
+				{/* Pending Loans Panel */}
+				<div className="adm-pending">
 					<div className="panel">
 						<div className="panel-head">
-							<span className="panel-title">Recent Activity</span>
-							<span className="panel-badge">Live</span>
+							<span className="panel-title">Pending Loan Applications</span>
+							<span className="panel-badge">{pendingLoans.length} pending</span>
 						</div>
-						{recentActivity.map((a) => {
-							const s = statusMap[a.status];
-							return (
-								<div key={a.user + a.time} className="act-row">
-									<div className="act-avatar">{a.user.slice(0,2)}</div>
-									<div className="act-info">
-										<div className="act-user">{a.user}</div>
-										<div className="act-action">{a.action}</div>
+						{loading ? (
+							<div className="empty-state">Loading...</div>
+						) : pendingLoans.length === 0 ? (
+							<div className="empty-state">No pending loan applications</div>
+						) : (
+							pendingLoans.map((loan) => (
+								<div key={loan.id} className="loan-row">
+									<div className="loan-info">
+										<div className="loan-borrower">{loan.borrowerName}</div>
+										<div className="loan-details">
+											{loan.purpose} • {loan.tenure} months • Applied {new Date(loan.createdAt).toLocaleDateString()}
+										</div>
 									</div>
-									<div className="act-right">
-										<div className="act-amount">{a.amount}</div>
-										<div className="act-time">{a.time}</div>
+									<div className="loan-amount">${loan.amount?.toLocaleString()}</div>
+									<div className="loan-actions">
+										<button 
+											className="loan-btn btn-approve"
+											onClick={() => handleApproveLoan(loan.id)}
+											disabled={actionLoading === loan.id}
+										>
+											{actionLoading === loan.id ? "..." : "Approve"}
+										</button>
+										<button 
+											className="loan-btn btn-reject"
+											onClick={() => handleRejectLoan(loan.id)}
+											disabled={actionLoading === loan.id}
+										>
+											{actionLoading === loan.id ? "..." : "Reject"}
+										</button>
 									</div>
-									<div className="act-dot" style={{ background: s.dot, boxShadow: `0 0 6px ${s.dot}` }} />
 								</div>
-							);
-						})}
-					</div>
-
-					{/* Role breakdown */}
-					<div className="panel">
-						<div className="panel-head">
-							<span className="panel-title">User Roles</span>
-							<span className="panel-badge">3,421 total</span>
-						</div>
-						{roleBreakdown.map((r) => (
-							<div key={r.role} className="role-row">
-								<div className="role-info">
-									<span className="role-name">{r.role}</span>
-									<span className="role-count" style={{ color: r.color }}>{r.count.toLocaleString()}</span>
-								</div>
-								<div className="role-bar-bg">
-									<div className="role-bar" style={{ width: `${r.pct}%`, background: r.color }} />
-								</div>
-							</div>
-						))}
+							))
+						)}
 					</div>
 				</div>
 			</div>

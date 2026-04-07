@@ -1,11 +1,12 @@
+import { useEffect, useMemo, useState } from "react";
 import DashboardLayout from "../../components/layout/DashboardLayout";
-import { securityLogs } from "../../data/securityLogs.mock";
 import DataTable from "../../components/common/Table";
+import { apiGet } from "../../utils/apiClient";
 
 const severityColors = {
-  Low:    { color: "#34d399", bg: "rgba(52,211,153,0.1)"  },
-  Medium: { color: "#fb923c", bg: "rgba(251,146,60,0.1)"  },
-  High:   { color: "#f87171", bg: "rgba(248,113,113,0.1)" },
+  LOW:    { color: "#34d399", bg: "rgba(52,211,153,0.1)"  },
+  MEDIUM: { color: "#fb923c", bg: "rgba(251,146,60,0.1)"  },
+  HIGH:   { color: "#f87171", bg: "rgba(248,113,113,0.1)" },
 };
 
 const columns = [
@@ -16,7 +17,8 @@ const columns = [
     key: "severity",
     label: "Severity",
     render: (val) => {
-      const s = severityColors[val] || { color: "#94a3b8", bg: "rgba(148,163,184,0.1)" };
+      const key = String(val || "").toUpperCase();
+      const s = severityColors[key] || { color: "#94a3b8", bg: "rgba(148,163,184,0.1)" };
       return (
         <span
           style={{
@@ -32,25 +34,47 @@ const columns = [
             fontFamily: "'DM Sans', sans-serif",
           }}
         >
-          {val}
+          {key || "—"}
         </span>
       );
     },
   },
 ];
 
-const highCount = securityLogs.filter((l) => l.severity === "High").length;
-const medCount = securityLogs.filter((l) => l.severity === "Medium").length;
-const lowCount = securityLogs.filter((l) => l.severity === "Low").length;
-
-const summaryStats = [
-  { title: "Total Events",   value: securityLogs.length, accent: "#f59e0b", icon: "◑" },
-  { title: "High Severity",  value: highCount,           accent: "#f87171", icon: "◐" },
-  { title: "Medium",         value: medCount,             accent: "#fb923c", icon: "◒" },
-  { title: "Low",            value: lowCount,             accent: "#34d399", icon: "◈" },
-];
-
 export default function SecurityLogs() {
+  const [logs, setLogs] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchLogs = async () => {
+      try {
+        setLoading(true);
+        // Backend may or may not have this endpoint; if missing we show empty.
+        const res = await apiGet("/security-logs/all");
+        setLogs(res?.data || []);
+      } catch {
+        setLogs([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchLogs();
+  }, []);
+
+  const stats = useMemo(() => {
+    const high = logs.filter((l) => String(l.severity).toUpperCase() === "HIGH").length;
+    const med = logs.filter((l) => String(l.severity).toUpperCase() === "MEDIUM").length;
+    const low = logs.filter((l) => String(l.severity).toUpperCase() === "LOW").length;
+
+    return [
+      { title: "Total Events",   value: logs.length, accent: "#f59e0b", icon: "◑" },
+      { title: "High Severity",  value: high,           accent: "#f87171", icon: "◐" },
+      { title: "Medium",         value: med,             accent: "#fb923c", icon: "◒" },
+      { title: "Low",            value: low,             accent: "#34d399", icon: "◈" },
+    ];
+  }, [logs]);
+
   return (
     <DashboardLayout>
       <style>{`
@@ -109,31 +133,35 @@ export default function SecurityLogs() {
           <p className="sec-sub">System activity events, login attempts, and administrative actions.</p>
         </div>
 
-        {/* Summary stats */}
-        <div className="sec-stats">
-          {summaryStats.map((s) => (
-            <div
-              key={s.title}
-              className="sec-stat"
-              style={{ "--ac": s.accent, "--ac-border": s.accent + "44", "--ac-glow": s.accent + "18" }}
-            >
-              <div className="sec-stat-top">
-                <span className="sec-stat-label">{s.title}</span>
-                <span className="sec-stat-icon">{s.icon}</span>
-              </div>
-              <div className="sec-stat-value">{s.value}</div>
+        {loading ? (
+          <div style={{ color: "#64748b", padding: 20 }}>Loading...</div>
+        ) : (
+          <>
+            <div className="sec-stats">
+              {stats.map((s) => (
+                <div
+                  key={s.title}
+                  className="sec-stat"
+                  style={{ "--ac": s.accent, "--ac-border": s.accent + "44", "--ac-glow": s.accent + "18" }}
+                >
+                  <div className="sec-stat-top">
+                    <span className="sec-stat-label">{s.title}</span>
+                    <span className="sec-stat-icon">{s.icon}</span>
+                  </div>
+                  <div className="sec-stat-value">{s.value}</div>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
 
-        {/* Logs table */}
-        <DataTable
-          columns={columns}
-          data={securityLogs}
-          filterKey="severity"
-          filterOptions={["Low", "Medium", "High"]}
-          pageSize={8}
-        />
+            <DataTable
+              columns={columns}
+              data={logs}
+              filterKey="severity"
+              filterOptions={["LOW", "MEDIUM", "HIGH"]}
+              pageSize={8}
+            />
+          </>
+        )}
       </div>
     </DashboardLayout>
   );

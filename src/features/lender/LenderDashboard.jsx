@@ -1,28 +1,6 @@
+import { useEffect, useState } from "react";
 import DashboardLayout from "../../components/layout/DashboardLayout";
-
-const stats = [
-  { title: "Total Disbursed",    value: "$3.2M",  meta: "+$240K this month",   icon: "◈", accent: "#2dd4bf" },
-  { title: "Active Loans",       value: "142",    meta: "Across 38 borrowers", icon: "◉", accent: "#818cf8" },
-  { title: "Avg Loan Size",      value: "$22.5K", meta: "Up from $19.8K",     icon: "◐", accent: "#fb923c" },
-  { title: "Collections Due",    value: "$84K",   meta: "This month",          icon: "◑", accent: "#f59e0b" },
-  { title: "Default Exposure",   value: "$11K",   meta: "2 at-risk loans",     icon: "◒", accent: "#f87171" },
-  { title: "Repayment Rate",     value: "97.4%",  meta: "30-day rolling",      icon: "⬡", accent: "#34d399" },
-];
-
-const recentLoans = [
-  { borrower: "Arjun Mehta",  amount: "$35,000", term: "36mo", rate: "11.5%", status: "active",  date: "Feb 18" },
-  { borrower: "Keiko Tanaka", amount: "$18,000", term: "24mo", rate: "10.0%", status: "active",  date: "Feb 14" },
-  { borrower: "Marcus Webb",  amount: "$52,000", term: "48mo", rate: "12.2%", status: "review",  date: "Feb 10" },
-  { borrower: "Priya Nair",   amount: "$9,500",  term: "12mo", rate: "9.5%",  status: "active",  date: "Jan 28" },
-  { borrower: "Omar Hassan",  amount: "$27,000", term: "36mo", rate: "11.0%", status: "overdue", date: "Jan 15" },
-];
-
-const collections = [
-  { borrower: "Keiko Tanaka", due: "Feb 28", amount: "$812", status: "on-track" },
-  { borrower: "Arjun Mehta",  due: "Mar 1",  amount: "$1,104", status: "on-track" },
-  { borrower: "Omar Hassan",  due: "Feb 24", amount: "$872",  status: "overdue" },
-  { borrower: "Priya Nair",   due: "Mar 5",  amount: "$864",  status: "on-track" },
-];
+import { apiGet } from "../../utils/apiClient";
 
 const statusMap = {
   active:  { color: "#34d399", bg: "rgba(52,211,153,0.1)",  label: "Active"  },
@@ -35,6 +13,82 @@ const collMap = {
 };
 
 export default function LenderDashboard() {
+  const [loans, setLoans] = useState([]);
+  const [payments, setPayments] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const [loansRes, paymentsRes] = await Promise.all([
+          apiGet("/loans/lender/my-loans"),
+          apiGet("/payments/lender/my"),
+        ]);
+        setLoans(loansRes?.data || []);
+        setPayments(paymentsRes?.data || []);
+      } catch (e) {
+        console.error("Failed to load dashboard data", e);
+        setError("Failed to load dashboard data");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, []);
+
+  const kpiData = (() => {
+    const activeLoans = loans.filter((l) => String(l.status).toUpperCase() === "ACTIVE").length;
+    const completedPayments = payments.filter((p) => String(p.status).toUpperCase() === "COMPLETED");
+    const totalCollected = completedPayments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+    const repaymentRate = loans.length > 0 ? ((activeLoans / loans.length) * 100).toFixed(1) : 0;
+
+    return {
+      health: totalCollected > 0 ? "Healthy" : "Monitoring",
+      newLoans: loans.filter((l) => {
+        const d = new Date(l.createdAt);
+        const now = new Date();
+        return (now - d) < 30 * 24 * 60 * 60 * 1000;
+      }).length,
+      newDisbursed: loans.filter((l) => {
+        const d = new Date(l.createdAt);
+        const now = new Date();
+        return (now - d) < 30 * 24 * 60 * 60 * 1000;
+      }).reduce((sum, l) => sum + (Number(l.amount) || 0), 0),
+      pendingReview: loans.filter((l) => String(l.status).toUpperCase() === "PENDING").length,
+      totalCollected,
+      repaymentRate,
+    };
+  })();
+
+  const stats = [
+    { title: "Total Disbursed", value: "$" + (loans.reduce((s, l) => s + (Number(l.amount) || 0), 0) / 1e6).toFixed(1) + "M", meta: "All outstanding loans", icon: "◈", accent: "#2dd4bf" },
+    { title: "Active Loans", value: loans.filter((l) => String(l.status).toUpperCase() === "ACTIVE").length, meta: `Across borrowers`, icon: "◉", accent: "#818cf8" },
+    { title: "Avg Loan Size", value: loans.length > 0 ? "$" + (loans.reduce((s, l) => s + (Number(l.amount) || 0), 0) / loans.length).toLocaleString("en-US", { maximumFractionDigits: 0 }) : "$0", meta: "Portfolio average", icon: "◐", accent: "#fb923c" },
+    { title: "Collections Due", value: payments.filter((p) => String(p.status).toUpperCase() === "PENDING").reduce((s, p) => s + (Number(p.amount) || 0), 0) > 0 ? "$" + payments.filter((p) => String(p.status).toUpperCase() === "PENDING").reduce((s, p) => s + (Number(p.amount) || 0), 0).toLocaleString() : "$0", meta: "Pending collections", icon: "◑", accent: "#f59e0b" },
+    { title: "Default Exposure", value: loans.filter((l) => String(l.status).toUpperCase() === "OVERDUE").length > 0 ? "$" + loans.filter((l) => String(l.status).toUpperCase() === "OVERDUE").reduce((s, l) => s + (Number(l.amount) || 0), 0).toLocaleString() : "$0", meta: loans.filter((l) => String(l.status).toUpperCase() === "OVERDUE").length + " at-risk loans", icon: "◒", accent: "#f87171" },
+    { title: "Repayment Rate", value: kpiData.repaymentRate + "%", meta: "Active to total ratio", icon: "⬡", accent: "#34d399" },
+  ];
+
+  const recentLoans = loans.slice(0, 5).map((l) => ({
+    borrower: l.borrowerName || "—",
+    amount: "$" + Number(l.amount || 0).toLocaleString(),
+    term: l.tenure ? l.tenure + "mo" : "—",
+    rate: Number(l.interestRate || 0) + "%",
+    status: String(l.status || "").toLowerCase(),
+    date: l.createdAt ? new Date(l.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "—",
+  }));
+
+  const collections = payments.filter((p) => String(p.status).toUpperCase() !== "COMPLETED").slice(0, 4).map((p) => ({
+    borrower: p.borrowerName || "—",
+    due: p.dueDate ? new Date(p.dueDate).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "—",
+    amount: "$" + Number(p.amount || 0).toLocaleString(),
+    status: String(p.status || "").toLowerCase() === "pending" ? "on-track" : "overdue",
+  }));
+
   return (
       <DashboardLayout>
         <style>{`
@@ -106,93 +160,109 @@ export default function LenderDashboard() {
             <p className="ln-sub">Active loans, collections, repayment tracking, and risk overview.</p>
           </div>
 
-          {/* KPI banner */}
-          <div className="kpi-banner">
-            <div className="kpi-cell">
-              <div className="kpi-label">Portfolio Health</div>
-              <div className="kpi-val" style={{ color: "#34d399" }}>Healthy</div>
-              <div className="kpi-meta">97.4% repayment rate</div>
-            </div>
-            <div className="kpi-cell">
-              <div className="kpi-label">New This Month</div>
-              <div className="kpi-val">8 loans</div>
-              <div className="kpi-meta">+$240K disbursed</div>
-            </div>
-            <div className="kpi-cell">
-              <div className="kpi-label">Pending Review</div>
-              <div className="kpi-val" style={{ color: "#fb923c" }}>3 apps</div>
-              <div className="kpi-meta">1 high-value flagged</div>
-            </div>
-          </div>
-
-          {/* Stats */}
-          <div className="ln-stats">
-            {stats.map((s) => (
-                <div
-                    key={s.title}
-                    className="lstat"
-                    style={{ "--ac": s.accent, "--ac-b": s.accent + "44", "--ac-g": s.accent + "18" }}
-                >
-                  <div className="lstat-head">
-                    <span className="lstat-label">{s.title}</span>
-                    <span className="lstat-icon">{s.icon}</span>
-                  </div>
-                  <div className="lstat-value">{s.value}</div>
-                  <div className="lstat-meta">{s.meta}</div>
+          {loading ? (
+            <div style={{ color: "#64748b", padding: 20 }}>Loading dashboard...</div>
+          ) : error ? (
+            <div style={{ color: "#ef4444", padding: 20 }}>{error}</div>
+          ) : (
+            <>
+              {/* KPI banner */}
+              <div className="kpi-banner">
+                <div className="kpi-cell">
+                  <div className="kpi-label">Portfolio Health</div>
+                  <div className="kpi-val" style={{ color: "#34d399" }}>{kpiData.health}</div>
+                  <div className="kpi-meta">{kpiData.repaymentRate}% repayment rate</div>
                 </div>
-            ))}
-          </div>
-
-          {/* Bottom */}
-          <div className="ln-bottom">
-            {/* Recent loans */}
-            <div className="panel">
-              <div className="panel-head">
-                <span className="panel-title">Recent Loans</span>
-                <span className="panel-sub">142 active</span>
+                <div className="kpi-cell">
+                  <div className="kpi-label">New This Month</div>
+                  <div className="kpi-val">{kpiData.newLoans} loans</div>
+                  <div className="kpi-meta">+${(kpiData.newDisbursed / 1000).toFixed(0)}K disbursed</div>
+                </div>
+                <div className="kpi-cell">
+                  <div className="kpi-label">Pending Review</div>
+                  <div className="kpi-val" style={{ color: "#fb923c" }}>{kpiData.pendingReview} apps</div>
+                  <div className="kpi-meta">{kpiData.pendingReview > 0 ? "Awaiting action" : "All processed"}</div>
+                </div>
               </div>
-              {recentLoans.map((l) => {
-                const st = statusMap[l.status];
-                return (
-                    <div key={l.borrower} className="loan-row">
-                      <div className="loan-avatar">{l.borrower.split(" ").map(n=>n[0]).join("")}</div>
-                      <div>
-                        <div className="loan-name">{l.borrower}</div>
-                        <div className="loan-meta">{l.term} · {l.date}</div>
-                      </div>
-                      <div className="loan-details">
-                        <div style={{ textAlign: "right" }}>
-                          <div className="loan-amount">{l.amount}</div>
-                          <div className="loan-rate">{l.rate} APR</div>
-                        </div>
-                        <span className="loan-status" style={{ color: st.color, background: st.bg }}>{st.label}</span>
-                      </div>
-                    </div>
-                );
-              })}
-            </div>
 
-            {/* Collections */}
-            <div className="panel">
-              <div className="panel-head">
-                <span className="panel-title">Collections</span>
-                <span className="panel-sub">This week</span>
-              </div>
-              {collections.map((c) => {
-                const cm = collMap[c.status];
-                return (
-                    <div key={c.borrower} className="coll-row">
-                      <div style={{ flex: 1 }}>
-                        <div className="coll-name">{c.borrower}</div>
-                        <div className="coll-due">Due {c.due}</div>
+              {/* Stats */}
+              <div className="ln-stats">
+                {stats.map((s) => (
+                    <div
+                        key={s.title}
+                        className="lstat"
+                        style={{ "--ac": s.accent, "--ac-b": s.accent + "44", "--ac-g": s.accent + "18" }}
+                    >
+                      <div className="lstat-head">
+                        <span className="lstat-label">{s.title}</span>
+                        <span className="lstat-icon">{s.icon}</span>
                       </div>
-                      <div className="coll-amount">{c.amount}</div>
-                      <div className="coll-dot" style={{ background: cm.color, boxShadow: `0 0 6px ${cm.color}` }} />
+                      <div className="lstat-value">{s.value}</div>
+                      <div className="lstat-meta">{s.meta}</div>
                     </div>
-                );
-              })}
-            </div>
-          </div>
+                ))}
+              </div>
+
+              {/* Bottom */}
+              <div className="ln-bottom">
+                {/* Recent loans */}
+                <div className="panel">
+                  <div className="panel-head">
+                    <span className="panel-title">Recent Loans</span>
+                    <span className="panel-sub">{loans.length} active</span>
+                  </div>
+                  {recentLoans.length > 0 ? (
+                    recentLoans.map((l) => {
+                      const st = statusMap[l.status] || statusMap.review;
+                      return (
+                          <div key={l.borrower} className="loan-row">
+                            <div className="loan-avatar">{l.borrower.split(" ").map(n=>n[0]).join("")}</div>
+                            <div>
+                              <div className="loan-name">{l.borrower}</div>
+                              <div className="loan-meta">{l.term} · {l.date}</div>
+                            </div>
+                            <div className="loan-details">
+                              <div style={{ textAlign: "right" }}>
+                                <div className="loan-amount">{l.amount}</div>
+                                <div className="loan-rate">{l.rate} APR</div>
+                              </div>
+                              <span className="loan-status" style={{ color: st.color, background: st.bg }}>{st.label}</span>
+                            </div>
+                          </div>
+                      );
+                    })
+                  ) : (
+                    <div style={{ padding: "20px", color: "#64748b" }}>No loans yet</div>
+                  )}
+                </div>
+
+                {/* Collections */}
+                <div className="panel">
+                  <div className="panel-head">
+                    <span className="panel-title">Collections</span>
+                    <span className="panel-sub">Pending</span>
+                  </div>
+                  {collections.length > 0 ? (
+                    collections.map((c) => {
+                      const cm = collMap[c.status];
+                      return (
+                          <div key={c.borrower} className="coll-row">
+                            <div style={{ flex: 1 }}>
+                              <div className="coll-name">{c.borrower}</div>
+                              <div className="coll-due">Due {c.due}</div>
+                            </div>
+                            <div className="coll-amount">{c.amount}</div>
+                            <div className="coll-dot" style={{ background: cm.color, boxShadow: `0 0 6px ${cm.color}` }} />
+                          </div>
+                      );
+                    })
+                  ) : (
+                    <div style={{ padding: "20px", color: "#64748b" }}>No pending collections</div>
+                  )}
+                </div>
+              </div>
+            </>
+          )}
         </div>
       </DashboardLayout>
   );

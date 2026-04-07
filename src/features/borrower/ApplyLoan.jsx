@@ -1,5 +1,6 @@
 import { useState } from "react";
 import DashboardLayout from "../../components/layout/DashboardLayout";
+import { apiPost } from "../../utils/apiClient";
 
 const purposes = ["Home Renovation", "Education", "Medical", "Vehicle Purchase", "Business Expansion", "Personal"];
 const tenures = ["12", "24", "36", "48"];
@@ -13,10 +14,36 @@ function calcEMI(amount, months, rate) {
 export default function ApplyLoan() {
   const [form, setForm] = useState({ amount: "", tenure: "24", purpose: "" });
   const [submitted, setSubmitted] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
   const interestRate = 10.5;
 
   const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
-  const handleSubmit = (e) => { e.preventDefault(); setSubmitted(true); };
+  
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+
+    try {
+      const response = await apiPost("/marketplace/requests", {
+        amount: parseFloat(form.amount),
+        tenure: parseInt(form.tenure),
+        purpose: form.purpose,
+        interestRate: interestRate,
+      });
+
+      if (response && response.data) {
+        setSubmitted(true);
+      } else {
+        setError("Failed to submit request. Please try again.");
+      }
+    } catch (err) {
+      setError(err.message || "An error occurred while submitting your request.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const emi = calcEMI(Number(form.amount), Number(form.tenure), interestRate);
   const totalPayable = emi * Number(form.tenure);
@@ -108,14 +135,28 @@ export default function ApplyLoan() {
 
             <div style={styles.panel}>
               <form onSubmit={handleSubmit} style={{ display:"flex", flexDirection:"column", gap:18 }}>
+                {error && (
+                  <div style={{
+                    background: "rgba(248,113,113,0.1)",
+                    border: "1px solid rgba(248,113,113,0.3)",
+                    borderRadius: 10,
+                    padding: "12px 16px",
+                    fontSize: 13,
+                    color: "#f87171",
+                    fontFamily: "'DM Sans', sans-serif",
+                  }}>
+                    {error}
+                  </div>
+                )}
+                
                 <div>
                   <label className="al-label">Loan Amount ($)</label>
-                  <input className="al-input" type="number" name="amount" value={form.amount} onChange={handleChange} required min="1000" max="100000" placeholder="e.g. 25,000" />
+                  <input className="al-input" type="number" name="amount" value={form.amount} onChange={handleChange} required min="1000" max="100000" placeholder="e.g. 25,000" disabled={loading} />
                 </div>
 
                 <div>
                   <label className="al-label">Tenure</label>
-                  <select className="al-select" name="tenure" value={form.tenure} onChange={handleChange}>
+                  <select className="al-select" name="tenure" value={form.tenure} onChange={handleChange} disabled={loading}>
                     {tenures.map(t => <option key={t} value={t}>{t} months</option>)}
                   </select>
                 </div>
@@ -127,14 +168,14 @@ export default function ApplyLoan() {
 
                 <div>
                   <label className="al-label">Purpose</label>
-                  <select className="al-select" name="purpose" value={form.purpose} onChange={handleChange} required>
+                  <select className="al-select" name="purpose" value={form.purpose} onChange={handleChange} required disabled={loading}>
                     <option value="">Select a purpose…</option>
                     {purposes.map(p => <option key={p} value={p}>{p}</option>)}
                   </select>
                 </div>
 
-                <button type="submit" className="al-submit" style={{ marginTop:6 }}>
-                  Submit Application →
+                <button type="submit" className="al-submit" style={{ marginTop:6, opacity: loading ? 0.6 : 1, cursor: loading ? "not-allowed" : "pointer" }} disabled={loading}>
+                  {loading ? "Submitting..." : "Submit Application →"}
                 </button>
               </form>
             </div>

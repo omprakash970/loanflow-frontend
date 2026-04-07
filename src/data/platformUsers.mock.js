@@ -1,17 +1,1 @@
-export const platformUsers = [
-  { id: "USR-001", name: "Rajan Kapoor",    email: "rajan@loanflow.com",    role: "Admin",    status: "Active",   joinDate: "2024-01-15" },
-  { id: "USR-002", name: "Sarah Mitchell",  email: "sarah@loanflow.com",    role: "Admin",    status: "Active",   joinDate: "2024-02-20" },
-  { id: "USR-003", name: "Arjun Mehta",     email: "arjun@loanflow.com",    role: "Borrower", status: "Active",   joinDate: "2025-03-10" },
-  { id: "USR-004", name: "Keiko Tanaka",    email: "keiko@loanflow.com",    role: "Borrower", status: "Active",   joinDate: "2025-04-22" },
-  { id: "USR-005", name: "Marcus Webb",     email: "marcus@loanflow.com",   role: "Borrower", status: "Active",   joinDate: "2025-05-08" },
-  { id: "USR-006", name: "Priya Nair",      email: "priya@loanflow.com",    role: "Borrower", status: "Disabled", joinDate: "2025-06-14" },
-  { id: "USR-007", name: "Omar Hassan",     email: "omar@loanflow.com",     role: "Borrower", status: "Active",   joinDate: "2025-07-03" },
-  { id: "USR-008", name: "Sarah Kim",       email: "sarahk@loanflow.com",   role: "Borrower", status: "Active",   joinDate: "2025-08-19" },
-  { id: "USR-009", name: "Liu Wei",         email: "liuwei@loanflow.com",   role: "Borrower", status: "Disabled", joinDate: "2025-01-25" },
-  { id: "USR-010", name: "David Chen",      email: "david@capitalfin.com",  role: "Lender",   status: "Active",   joinDate: "2024-06-01" },
-  { id: "USR-011", name: "Elena Rossi",     email: "elena@quicklend.com",   role: "Lender",   status: "Active",   joinDate: "2024-08-12" },
-  { id: "USR-012", name: "James Foster",    email: "james@trustbridge.com", role: "Lender",   status: "Active",   joinDate: "2024-11-05" },
-  { id: "USR-013", name: "Ananya Sharma",   email: "ananya@loanflow.com",   role: "Analyst",  status: "Active",   joinDate: "2024-09-18" },
-  { id: "USR-014", name: "Tom Richards",    email: "tom@loanflow.com",      role: "Analyst",  status: "Active",   joinDate: "2025-01-07" },
-  { id: "USR-015", name: "Fatima Al-Sayed", email: "fatima@loanflow.com",   role: "Analyst",  status: "Disabled", joinDate: "2025-03-30" },
-];
+export const platformUsers = [];

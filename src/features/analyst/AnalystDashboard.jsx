@@ -1,28 +1,6 @@
+import { useEffect, useState } from "react";
 import DashboardLayout from "../../components/layout/DashboardLayout";
-
-const stats = [
-	{ title: "Default Probability", value: "1.9%",  meta: "Stable for 30 days",       icon: "◈", accent: "#34d399" },
-	{ title: "Portfolio Exposure",  value: "$5.1M",  meta: "Across 6 segments",        icon: "◉", accent: "#2dd4bf" },
-	{ title: "Active Alerts",       value: "12",     meta: "3 high-priority",          icon: "◐", accent: "#f87171" },
-	{ title: "Avg Risk Score",      value: "68",     meta: "Moderate band",            icon: "◑", accent: "#fb923c" },
-	{ title: "Cohorts Tracked",     value: "24",     meta: "Q1 2024 – Q4 2025",       icon: "◒", accent: "#818cf8" },
-	{ title: "Reports Generated",   value: "156",    meta: "18 this month",            icon: "⬡", accent: "#38bdf8" },
-];
-
-const riskSegments = [
-	{ label: "Low Risk",      pct: 42, count: 538, color: "#34d399" },
-	{ label: "Moderate",      pct: 35, count: 449, color: "#fb923c" },
-	{ label: "High Risk",     pct: 15, count: 192, color: "#f87171" },
-	{ label: "Critical",      pct: 8,  count: 103, color: "#e11d48" },
-];
-
-const alerts = [
-	{ id: "ALT-091", msg: "Credit utilization spike — Liu W.", severity: "high",   time: "5m ago"  },
-	{ id: "ALT-090", msg: "Missed 3 consecutive EMIs — Raj P.", severity: "high",  time: "42m ago" },
-	{ id: "ALT-089", msg: "Score drop >40pts — Fatima A.",     severity: "med",   time: "2h ago"  },
-	{ id: "ALT-088", msg: "New high-value application $95K",   severity: "low",   time: "4h ago"  },
-	{ id: "ALT-087", msg: "Cohort Q3-2024 maturity reached",   severity: "info",  time: "1d ago"  },
-];
+import { apiGet } from "../../utils/apiClient";
 
 const sevMap = {
 	high:  { color: "#f87171", bg: "rgba(248,113,113,0.1)", label: "HIGH" },
@@ -31,13 +9,84 @@ const sevMap = {
 	info:  { color: "#38bdf8", bg: "rgba(56,189,248,0.1)",  label: "INFO" },
 };
 
-// Fake sparkline data (relative heights 0–100)
-const sparklines = {
-	"Default Probability": [55,52,60,58,48,44,42,45,40,38,35,36],
-	"Portfolio Exposure":  [60,62,65,70,72,74,73,78,80,81,80,82],
-};
-
 export default function AnalystDashboard() {
+	const [stats, setStats] = useState([]);
+	const [riskSegments, setRiskSegments] = useState([]);
+	const [alerts, setAlerts] = useState([]);
+	const [sparklines, setSparklines] = useState({});
+	const [loading, setLoading] = useState(true);
+	const [error, setError] = useState(null);
+
+	useEffect(() => {
+		const fetchDashboardData = async () => {
+			try {
+				setLoading(true);
+				setError(null);
+
+				// Fetch all loans (approved ones)
+				const loansRes = await apiGet("/loans/all");
+				const loans = loansRes?.data || [];
+
+				// Fetch risk distribution
+				const riskRes = await apiGet("/analytics/risk-distribution");
+				const riskData = riskRes?.data || [];
+
+				// Fetch portfolio exposure
+				const exposureRes = await apiGet("/analytics/portfolio-exposure");
+				const exposureData = exposureRes?.data || [];
+
+				// Calculate stats
+				const activeLoans = loans.filter(l => String(l.status).toUpperCase() === "ACTIVE").length;
+				const totalVolume = loans.reduce((sum, l) => sum + (Number(l.amount) || 0), 0);
+				const pendingLoans = loans.filter(l => String(l.status).toUpperCase() === "PENDING").length;
+				const overdueLoans = loans.filter(l => String(l.status).toUpperCase() === "OVERDUE").length;
+
+				const calculatedStats = [
+					{ title: "Default Probability", value: overdueLoans > 0 ? ((overdueLoans / loans.length) * 100).toFixed(1) + "%" : "0%", meta: "Loan overdue rate", icon: "◈", accent: "#34d399" },
+					{ title: "Portfolio Exposure", value: "$" + (totalVolume / 1e6).toFixed(1) + "M", meta: "Total active volume", icon: "◉", accent: "#2dd4bf" },
+					{ title: "Active Loans", value: activeLoans.toString(), meta: "Currently active", icon: "◐", accent: "#34d399" },
+					{ title: "Avg Risk Score", value: "68", meta: "Moderate band", icon: "◑", accent: "#fb923c" },
+					{ title: "Pending Review", value: pendingLoans.toString(), meta: "Awaiting approval", icon: "◒", accent: "#818cf8" },
+					{ title: "Total Loans", value: loans.length.toString(), meta: "All records", icon: "⬡", accent: "#38bdf8" },
+				];
+
+				setStats(calculatedStats);
+
+				// Map risk data to segments
+				const riskSegmentsData = riskData.map((item, idx) => ({
+					label: item.band || "Band " + (idx + 1),
+					pct: Math.round((item.count / loans.length) * 100) || 0,
+					count: item.count || 0,
+					color: ["#34d399", "#fb923c", "#f87171", "#e11d48", "#7c3aed"][idx % 5]
+				}));
+				setRiskSegments(riskSegmentsData);
+
+				// Create mock alerts from loans
+				const mockAlerts = loans.filter(l => String(l.status).toUpperCase() === "OVERDUE" || String(l.status).toUpperCase() === "PENDING").slice(0, 5).map((loan, idx) => ({
+					id: "ALT-" + (100 - idx),
+					msg: `Loan ${loan.loanId} - ${loan.borrowerName}`,
+					severity: String(loan.status).toUpperCase() === "OVERDUE" ? "high" : "low",
+					time: "recently"
+				}));
+				setAlerts(mockAlerts);
+
+				// Create mock sparklines
+				const sparklineData = {
+					"Default Probability": [55,52,60,58,48,44,42,45,40,38,35,36],
+					"Portfolio Exposure": [60,62,65,70,72,74,73,78,80,81,80,82],
+				};
+				setSparklines(sparklineData);
+			} catch (err) {
+				console.error("Failed to load dashboard data:", err);
+				setError("Failed to load dashboard data");
+			} finally {
+				setLoading(false);
+			}
+		};
+
+		fetchDashboardData();
+	}, []);
+
 	return (
 		<DashboardLayout>
 			<style>{`
@@ -104,6 +153,8 @@ export default function AnalystDashboard() {
         .seg-pct { font-size:11px; color:#475569; font-family:'DM Sans',sans-serif; }
         .seg-bar-bg { height:5px; background:rgba(255,255,255,0.05); border-radius:5px; overflow:hidden; }
         .seg-bar { height:100%; border-radius:5px; }
+        
+        .empty-state { text-align:center; padding:40px 20px; color:#64748b; }
       `}</style>
 
 			<div className="an-root">
@@ -113,84 +164,100 @@ export default function AnalystDashboard() {
 					<p className="an-sub">Portfolio risk metrics, cohort analysis, and report generation.</p>
 				</div>
 
-				{/* Stats */}
-				<div className="an-stats">
-					{stats.map((s) => {
-						const spark = sparklines[s.title];
-						const max = spark ? Math.max(...spark) : 1;
-						return (
-							<div
-								key={s.title}
-								className="astat"
-								style={{ "--ac": s.accent, "--ac-b": s.accent + "44", "--ac-g": s.accent + "18" }}
-							>
-								<div className="astat-head">
-									<span className="astat-label">{s.title}</span>
-									<span className="astat-icon">{s.icon}</span>
-								</div>
-								<div className="astat-value">{s.value}</div>
-								<div className="astat-meta">{s.meta}</div>
-								{spark && (
-									<div className="sparkline">
-										{spark.map((v, i) => (
-											<div
-												key={i}
-												className="spark-bar"
-												style={{ height: `${(v / max) * 100}%`, background: s.accent + (i === spark.length - 1 ? "ff" : "44") }}
-											/>
-										))}
+			{loading ? (
+				<div className="empty-state">Loading dashboard data...</div>
+			) : error ? (
+				<div style={{ textAlign: "center", padding: "40px 20px", color: "#ef4444" }}>{error}</div>
+				) : (
+					<>
+						{/* Stats */}
+						<div className="an-stats">
+							{stats.map((s) => {
+								const spark = sparklines[s.title];
+								const max = spark ? Math.max(...spark) : 1;
+								return (
+									<div
+										key={s.title}
+										className="astat"
+										style={{ "--ac": s.accent, "--ac-b": s.accent + "44", "--ac-g": s.accent + "18" }}
+									>
+										<div className="astat-head">
+											<span className="astat-label">{s.title}</span>
+											<span className="astat-icon">{s.icon}</span>
+										</div>
+										<div className="astat-value">{s.value}</div>
+										<div className="astat-meta">{s.meta}</div>
+										{spark && (
+											<div className="sparkline">
+												{spark.map((v, i) => (
+													<div
+														key={i}
+														className="spark-bar"
+														style={{ height: `${(v / max) * 100}%`, background: s.accent + (i === spark.length - 1 ? "ff" : "44") }}
+													/>
+												))}
+											</div>
+										)}
 									</div>
+								);
+							})}
+						</div>
+
+						{/* Bottom row */}
+						<div className="an-bottom">
+							{/* Alert feed */}
+							<div className="panel">
+								<div className="panel-head">
+									<span className="panel-title">Active Alerts</span>
+									<span className="panel-sub">{alerts.length} alerts</span>
+								</div>
+								{alerts.length === 0 ? (
+									<div className="empty-state">No alerts</div>
+								) : (
+									alerts.map((a) => {
+										const sv = sevMap[a.severity];
+										return (
+											<div key={a.id} className="alert-row">
+												<span className="alert-sev" style={{ color: sv.color, background: sv.bg }}>{sv.label}</span>
+												<div style={{ flex: 1 }}>
+													<div className="alert-id">{a.id}</div>
+													<div className="alert-msg">{a.msg}</div>
+												</div>
+												<div className="alert-time">{a.time}</div>
+											</div>
+										);
+									})
 								)}
 							</div>
-						);
-					})}
-				</div>
 
-				{/* Bottom row */}
-				<div className="an-bottom">
-					{/* Alert feed */}
-					<div className="panel">
-						<div className="panel-head">
-							<span className="panel-title">Active Alerts</span>
-							<span className="panel-sub">3 critical</span>
-						</div>
-						{alerts.map((a) => {
-							const sv = sevMap[a.severity];
-							return (
-								<div key={a.id} className="alert-row">
-									<span className="alert-sev" style={{ color: sv.color, background: sv.bg }}>{sv.label}</span>
-									<div style={{ flex: 1 }}>
-										<div className="alert-id">{a.id}</div>
-										<div className="alert-msg">{a.msg}</div>
-									</div>
-									<div className="alert-time">{a.time}</div>
+							{/* Risk segments */}
+							<div className="panel">
+								<div className="panel-head">
+									<span className="panel-title">Portfolio Risk</span>
+									<span className="panel-sub">{riskSegments.reduce((sum, r) => sum + r.count, 0)} loans</span>
 								</div>
-							);
-						})}
-					</div>
-
-					{/* Risk segments */}
-					<div className="panel">
-						<div className="panel-head">
-							<span className="panel-title">Portfolio Risk</span>
-							<span className="panel-sub">1,282 loans</span>
-						</div>
-						{riskSegments.map((r) => (
-							<div key={r.label} className="seg-row">
-								<div className="seg-info">
-									<span className="seg-label">{r.label}</span>
-									<div style={{ textAlign: "right" }}>
-										<div className="seg-count" style={{ color: r.color }}>{r.count}</div>
-										<div className="seg-pct">{r.pct}%</div>
-									</div>
-								</div>
-								<div className="seg-bar-bg">
-									<div className="seg-bar" style={{ width: `${r.pct}%`, background: r.color }} />
-								</div>
+								{riskSegments.length === 0 ? (
+									<div className="empty-state">No risk data</div>
+								) : (
+									riskSegments.map((r) => (
+										<div key={r.label} className="seg-row">
+											<div className="seg-info">
+												<span className="seg-label">{r.label}</span>
+												<div style={{ textAlign: "right" }}>
+													<div className="seg-count" style={{ color: r.color }}>{r.count}</div>
+													<div className="seg-pct">{r.pct}%</div>
+												</div>
+											</div>
+											<div className="seg-bar-bg">
+												<div className="seg-bar" style={{ width: `${r.pct}%`, background: r.color }} />
+											</div>
+										</div>
+									))
+								)}
 							</div>
-						))}
-					</div>
-				</div>
+						</div>
+					</>
+				)}
 			</div>
 		</DashboardLayout>
 	);

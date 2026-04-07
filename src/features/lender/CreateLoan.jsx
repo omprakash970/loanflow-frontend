@@ -1,13 +1,40 @@
 import { useState } from "react";
 import DashboardLayout from "../../components/layout/DashboardLayout";
+import { apiPost } from "../../utils/apiClient";
 
 const tenures = ["12","24","36","48","60"];
 
 export default function CreateLoan() {
   const [form, setForm] = useState({ minAmount:"", maxAmount:"", interestRate:"", tenure:"24" });
   const [submitted, setSubmitted] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
   const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
-  const handleSubmit = (e) => { e.preventDefault(); setSubmitted(true); };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+
+    try {
+      const res = await apiPost("/marketplace/offers", {
+        minAmount: Number(form.minAmount),
+        maxAmount: Number(form.maxAmount),
+        interestRate: Number(form.interestRate),
+        tenure: Number(form.tenure),
+      });
+
+      if (!res?.data) {
+        throw new Error("Failed to publish offer");
+      }
+      setSubmitted(true);
+    } catch (err) {
+      setError(err?.message || "Failed to publish offer");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const previewEMI = (amt) => {
     if (!amt || !form.interestRate || !form.tenure) return null;
@@ -121,9 +148,11 @@ export default function CreateLoan() {
                   </select>
                 </div>
 
-                <button type="submit" className="cl-submit" style={{ marginTop:6 }}>
-                  Publish Loan Offer →
+                <button type="submit" className="cl-submit" style={{ marginTop:6 }} disabled={loading}>
+                  {loading ? "Publishing..." : "Publish Loan Offer →"}
                 </button>
+
+                {error && <div style={{ color:"red", marginTop:12, fontSize:14 }}>{error}</div>}
               </form>
             </div>
           </div>

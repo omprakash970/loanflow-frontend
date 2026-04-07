@@ -11,13 +11,15 @@ const menuByRole = {
   LENDER: [
     { label: "Dashboard", to: "/app", icon: "◈" },
     { label: "Create Loan", to: "/app/create-loan", icon: "◉" },
+    { label: "Open Requests", to: "/app/open-requests", icon: "◒" },
     { label: "Active Loans", to: "/app/active-loans", icon: "◐" },
     { label: "Borrowers", to: "/app/borrowers", icon: "◑" },
     { label: "Payments", to: "/app/payments", icon: "◒" },
   ],
   BORROWER: [
     { label: "Dashboard", to: "/app", icon: "◈" },
-    { label: "Apply for Loan", to: "/app/apply-loan", icon: "◉" },
+    { label: "Loan Offers", to: "/app/loan-offers", icon: "◉" },
+    { label: "Apply for Loan", to: "/app/apply-loan", icon: "◐" },
     { label: "My Loans", to: "/app/my-loans", icon: "◐" },
     { label: "EMI Schedule", to: "/app/emi-schedule", icon: "◑" },
     { label: "Profile", to: "/app/profile", icon: "◒" },
